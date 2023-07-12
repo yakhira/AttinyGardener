@@ -26,7 +26,6 @@
 #define RETRY	10	// 12
 #define FIVE_BYTES	5
 
-volatile bool sleep = true;
 volatile unsigned long pump_work_count = 0;
 
 const uint8_t PIPE0_ADDRESS_PGM[] PROGMEM = "1Node";
@@ -60,19 +59,15 @@ void receive() {
 		if (strcmp((char*)payload, "P1_ON") == 0) {
 			digitalWrite_B(PUMP1, HIGH);
 			pump_work_count = 0;
-			sleep = false;
 		} else if (strcmp((char*)payload, "P2_ON") == 0) {
 			digitalWrite_B(PUMP2, HIGH);
 			pump_work_count = 0;
-			sleep = false;
 		} else if (strcmp((char*)payload, "P1_OFF") == 0) {
 			digitalWrite_B(PUMP1, LOW);
 			pump_work_count = 0;
-			sleep = true;
 		} else if (strcmp((char*)payload, "P2_OFF") == 0) {
 			digitalWrite_B(PUMP2, LOW);
 			pump_work_count = 0;
-			sleep = true;
 		}
 	}
 
@@ -81,23 +76,6 @@ void receive() {
 
 	nrf24_writeReg(W_REGISTER | NRF_CONFIG,
 		NRF24_CFG_PWR_DOWN | NRF24_CFG_RX_MODE | NRF24_CFG_CRC_2B | NRF24_CFG_CRC_EN | NRF24_CFG_IRQ_MASK_ALL);
-}
-
-void wakeUp() {
-	nrf24_enableCE();
-	receive();
-	nrf24_disableCE();
-
-	if (!sleep) {
-		if ((pump_work_count/140) > PUMP_WORK_TIME) {
-			digitalWrite_B(PUMP1, LOW);
-			digitalWrite_B(PUMP2, LOW);
-			pump_work_count = 0;
-			sleep = true;
-		} else {
-			pump_work_count++;
-		}
-	}
 }
 
 void setup() {
@@ -130,13 +108,19 @@ void setup() {
 
 	nrf24_cmd(FLUSH_TX); // clean TX FIFOs thoroughly
 	nrf24_cmd(FLUSH_RX); // clean RX FIFOs thoroughly
-
-	setSleep(SLEEP_250MS);
-	attachInterrupt(0, wakeUp, LOW);
 }
 
 void loop(){
-	if (sleep) {
-		sleep_mode();
+	nrf24_enableCE();
+	receive();
+	nrf24_disableCE();
+
+	if ((pump_work_count) > PUMP_WORK_TIME) {
+		digitalWrite_B(PUMP1, LOW);
+		digitalWrite_B(PUMP2, LOW);
+		pump_work_count = 0;
+	} else {
+		pump_work_count++;
 	}
+	delay(1000);
 }
